@@ -463,11 +463,11 @@ const TelemetrySession& System::TelemetrySession() const {
 }
 
 ARM_Interface& System::CurrentArmInterface() {
-    return impl->kernel.CurrentScheduler().GetCurrentThread()->ArmInterface();
+    return impl->kernel.CurrentPhysicalCore().ArmInterface();
 }
 
 const ARM_Interface& System::CurrentArmInterface() const {
-    return impl->kernel.CurrentScheduler().GetCurrentThread()->ArmInterface();
+    return impl->kernel.CurrentPhysicalCore().ArmInterface();
 }
 
 std::size_t System::CurrentCoreIndex() const {
@@ -527,15 +527,11 @@ const Kernel::Process* System::CurrentProcess() const {
 }
 
 ARM_Interface& System::ArmInterface(std::size_t core_index) {
-    auto* thread = impl->kernel.Scheduler(core_index).GetCurrentThread();
-    ASSERT(thread && !thread->IsHLEThread());
-    return thread->ArmInterface();
+    return impl->kernel.PhysicalCore(core_index).ArmInterface();
 }
 
 const ARM_Interface& System::ArmInterface(std::size_t core_index) const {
-    auto* thread = impl->kernel.Scheduler(core_index).GetCurrentThread();
-    ASSERT(thread && !thread->IsHLEThread());
-    return thread->ArmInterface();
+    return impl->kernel.PhysicalCore(core_index).ArmInterface();
 }
 
 ExclusiveMonitor& System::Monitor() {

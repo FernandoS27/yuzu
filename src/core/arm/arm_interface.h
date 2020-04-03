@@ -65,6 +65,8 @@ public:
     /// Step CPU by one instruction
     virtual void Step() = 0;
 
+    virtual void ExceptionalExit() {}
+
     /// Clear all instruction cache
     virtual void ClearInstructionCache() = 0;
 

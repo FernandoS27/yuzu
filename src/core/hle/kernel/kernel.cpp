@@ -114,7 +114,7 @@ struct KernelCore::Impl {
             Core::MakeExclusiveMonitor(system.Memory(), Core::Hardware::NUM_CPU_CORES);
         for (std::size_t i = 0; i < Core::Hardware::NUM_CPU_CORES; i++) {
             schedulers[i] = std::make_unique<Kernel::Scheduler>(system, i);
-            cores.emplace_back(system, i, *schedulers[i], interrupts[i]);
+            cores.emplace_back(system, i, *schedulers[i], interrupts);
         }
     }
 
@@ -176,6 +176,10 @@ struct KernelCore::Impl {
 
         if (process == nullptr) {
             return;
+        }
+
+        for (auto& core : cores) {
+            core.SetIs64Bit(process->Is64BitProcess());
         }
 
         u32 core_id = GetCurrentHostThreadID();
@@ -473,12 +477,8 @@ const Core::ExclusiveMonitor& KernelCore::GetExclusiveMonitor() const {
 
 void KernelCore::InvalidateAllInstructionCaches() {
     if (!IsMulticore()) {
-        auto& threads = GlobalScheduler().GetThreadList();
-        for (auto& thread : threads) {
-            if (!thread->IsHLEThread()) {
-                auto& arm_interface = thread->ArmInterface();
-                arm_interface.ClearInstructionCache();
-            }
+        for (auto& physical_core : impl->cores) {
+            physical_core.ArmInterface().ClearInstructionCache();
         }
     } else {
         UNIMPLEMENTED_MSG("Cache Invalidation unimplemented for multicore");

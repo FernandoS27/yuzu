@@ -12,14 +12,6 @@
 #include "common/fiber.h"
 #include "common/logging/log.h"
 #include "common/thread_queue_list.h"
-#include "core/arm/arm_interface.h"
-#ifdef ARCHITECTURE_x86_64
-#include "core/arm/dynarmic/arm_dynarmic_32.h"
-#include "core/arm/dynarmic/arm_dynarmic_64.h"
-#endif
-#include "core/arm/cpu_interrupt_handler.h"
-#include "core/arm/exclusive_monitor.h"
-#include "core/arm/unicorn/arm_unicorn.h"
 #include "core/core.h"
 #include "core/core_timing.h"
 #include "core/core_timing_util.h"
@@ -66,7 +58,6 @@ void Thread::Stop() {
             // Mark the TLS slot in the thread's page as free.
             owner_process->FreeTLSRegion(tls_address);
         }
-        arm_interface.reset();
         has_exited = true;
     }
     global_handle = 0;
@@ -222,31 +213,7 @@ ResultVal<std::shared_ptr<Thread>> Thread::Create(Core::System& system, ThreadTy
     }
     // TODO(peachum): move to ScheduleThread() when scheduler is added so selected core is used
     // to initialize the context
-    thread->arm_interface.reset();
     if ((type_flags & THREADTYPE_HLE) == 0) {
-#ifdef ARCHITECTURE_x86_64
-        if (owner_process && !owner_process->Is64BitProcess()) {
-            thread->arm_interface = std::make_unique<Core::ARM_Dynarmic_32>(
-                system, kernel.Interrupts(), kernel.IsMulticore(), kernel.GetExclusiveMonitor(),
-                processor_id);
-        } else {
-            thread->arm_interface = std::make_unique<Core::ARM_Dynarmic_64>(
-                system, kernel.Interrupts(), kernel.IsMulticore(), kernel.GetExclusiveMonitor(),
-                processor_id);
-        }
-
-#else
-        if (owner_process && !owner_process->Is64BitProcess()) {
-            thread->arm_interface = std::make_shared<Core::ARM_Unicorn>(
-                system, kernel.Interrupts(), kernel.IsMulticore(), ARM_Unicorn::Arch::AArch32,
-                processor_id);
-        } else {
-            thread->arm_interface = std::make_shared<Core::ARM_Unicorn>(
-                system, kernel.Interrupts(), kernel.IsMulticore(), ARM_Unicorn::Arch::AArch64,
-                processor_id);
-        }
-        LOG_WARNING(Core, "CPU JIT requested, but Dynarmic not available");
-#endif
         ResetThreadContext32(thread->context_32, static_cast<u32>(stack_top),
                              static_cast<u32>(entry_point), static_cast<u32>(arg));
         ResetThreadContext64(thread->context_64, stack_top, entry_point, arg);
@@ -280,14 +247,6 @@ VAddr Thread::GetCommandBufferAddress() const {
     // Offset from the start of TLS at which the IPC command buffer begins.
     constexpr u64 command_header_offset = 0x80;
     return GetTLSAddress() + command_header_offset;
-}
-
-Core::ARM_Interface& Thread::ArmInterface() {
-    return *arm_interface;
-}
-
-const Core::ARM_Interface& Thread::ArmInterface() const {
-    return *arm_interface;
 }
 
 void Thread::SetStatus(ThreadStatus new_status) {

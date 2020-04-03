@@ -622,11 +622,14 @@ void Scheduler::OnThreadStart() {
 void Scheduler::Unload() {
     Thread* thread = current_thread.get();
     if (thread) {
-        thread->SetContinuousOnSVC(false);
         thread->last_running_ticks = system.CoreTiming().GetCPUTicks();
         thread->SetIsRunning(false);
+        if (thread->IsContinuousOnSVC() && !thread->IsHLEThread()) {
+            system.ArmInterface(core_id).ExceptionalExit();
+            thread->SetContinuousOnSVC(false);
+        }
         if (!thread->IsHLEThread() && !thread->HasExited()) {
-            Core::ARM_Interface& cpu_core = thread->ArmInterface();
+            Core::ARM_Interface& cpu_core = system.ArmInterface(core_id);
             cpu_core.SaveContext(thread->GetContext32());
             cpu_core.SaveContext(thread->GetContext64());
             // Save the TPIDR_EL0 system register in case it was modified.
@@ -653,12 +656,11 @@ void Scheduler::Reload() {
             system.Kernel().MakeCurrentProcess(thread_owner_process);
         }
         if (!thread->IsHLEThread()) {
-            Core::ARM_Interface& cpu_core = thread->ArmInterface();
+            Core::ARM_Interface& cpu_core = system.ArmInterface(core_id);
             cpu_core.LoadContext(thread->GetContext32());
             cpu_core.LoadContext(thread->GetContext64());
             cpu_core.SetTlsAddress(thread->GetTLSAddress());
             cpu_core.SetTPIDR_EL0(thread->GetTPIDR_EL0());
-            cpu_core.ChangeProcessorId(this->core_id);
             cpu_core.ClearExclusiveState();
         }
     }
@@ -686,12 +688,11 @@ void Scheduler::SwitchContextStep2() {
             system.Kernel().MakeCurrentProcess(thread_owner_process);
         }
         if (!new_thread->IsHLEThread()) {
-            Core::ARM_Interface& cpu_core = new_thread->ArmInterface();
+            Core::ARM_Interface& cpu_core = system.ArmInterface(core_id);
             cpu_core.LoadContext(new_thread->GetContext32());
             cpu_core.LoadContext(new_thread->GetContext64());
             cpu_core.SetTlsAddress(new_thread->GetTLSAddress());
             cpu_core.SetTPIDR_EL0(new_thread->GetTPIDR_EL0());
-            cpu_core.ChangeProcessorId(this->core_id);
             cpu_core.ClearExclusiveState();
         }
     }
@@ -722,11 +723,14 @@ void Scheduler::SwitchContext() {
         if (new_thread != nullptr && new_thread->IsSuspendThread()) {
             previous_thread->SetWasRunning(true);
         }
-        previous_thread->SetContinuousOnSVC(false);
         previous_thread->last_running_ticks = system.CoreTiming().GetCPUTicks();
         previous_thread->SetIsRunning(false);
+        if (previous_thread->IsContinuousOnSVC() && !previous_thread->IsHLEThread()) {
+            system.ArmInterface(core_id).ExceptionalExit();
+            previous_thread->SetContinuousOnSVC(false);
+        }
         if (!previous_thread->IsHLEThread() && !previous_thread->HasExited()) {
-            Core::ARM_Interface& cpu_core = previous_thread->ArmInterface();
+            Core::ARM_Interface& cpu_core = system.ArmInterface(core_id);
             cpu_core.SaveContext(previous_thread->GetContext32());
             cpu_core.SaveContext(previous_thread->GetContext64());
             // Save the TPIDR_EL0 system register in case it was modified.
