@@ -10,11 +10,9 @@
 #include "common/common_types.h"
 #include "common/spin_lock.h"
 
-#if !defined(_WIN32) && !defined(WIN32)
 namespace boost::context::detail {
 struct transfer_t;
 }
-#endif
 
 namespace Common {
 
@@ -64,17 +62,10 @@ public:
 private:
     Fiber();
 
-#if defined(_WIN32) || defined(WIN32)
-    void OnRewind();
-    void Start();
-    static void FiberStartFunc(void* fiber_parameter);
-    static void RewindStartFunc(void* fiber_parameter);
-#else
     void OnRewind(boost::context::detail::transfer_t& transfer);
     void Start(boost::context::detail::transfer_t& transfer);
     static void FiberStartFunc(boost::context::detail::transfer_t transfer);
     static void RewindStartFunc(boost::context::detail::transfer_t transfer);
-#endif
 
     struct FiberImpl;
 

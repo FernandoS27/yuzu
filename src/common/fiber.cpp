@@ -4,115 +4,11 @@
 
 #include "common/assert.h"
 #include "common/fiber.h"
-#if defined(_WIN32) || defined(WIN32)
-#include <windows.h>
-#else
 #include <boost/context/detail/fcontext.hpp>
-#endif
 
 namespace Common {
 
 constexpr std::size_t default_stack_size = 256 * 1024; // 256kb
-
-#if defined(_WIN32) || defined(WIN32)
-
-struct Fiber::FiberImpl {
-    LPVOID handle = nullptr;
-    LPVOID rewind_handle = nullptr;
-};
-
-void Fiber::Start() {
-    ASSERT(previous_fiber != nullptr);
-    previous_fiber->guard.unlock();
-    previous_fiber.reset();
-    entry_point(start_parameter);
-    UNREACHABLE();
-}
-
-void Fiber::OnRewind() {
-    ASSERT(impl->handle != nullptr);
-    DeleteFiber(impl->handle);
-    impl->handle = impl->rewind_handle;
-    impl->rewind_handle = nullptr;
-    rewind_point(rewind_parameter);
-    UNREACHABLE();
-}
-
-void Fiber::FiberStartFunc(void* fiber_parameter) {
-    auto fiber = static_cast<Fiber*>(fiber_parameter);
-    fiber->Start();
-}
-
-void Fiber::RewindStartFunc(void* fiber_parameter) {
-    auto fiber = static_cast<Fiber*>(fiber_parameter);
-    fiber->OnRewind();
-}
-
-Fiber::Fiber(std::function<void(void*)>&& entry_point_func, void* start_parameter)
-    : entry_point{std::move(entry_point_func)}, start_parameter{start_parameter} {
-    impl = std::make_unique<FiberImpl>();
-    impl->handle = CreateFiber(default_stack_size, &FiberStartFunc, this);
-}
-
-Fiber::Fiber() {
-    impl = std::make_unique<FiberImpl>();
-}
-
-Fiber::~Fiber() {
-    if (released) {
-        return;
-    }
-    // Make sure the Fiber is not being used
-    const bool locked = guard.try_lock();
-    ASSERT_MSG(locked, "Destroying a fiber that's still running");
-    if (locked) {
-        guard.unlock();
-    }
-    DeleteFiber(impl->handle);
-}
-
-void Fiber::Exit() {
-    ASSERT_MSG(is_thread_fiber, "Exitting non main thread fiber");
-    if (!is_thread_fiber) {
-        return;
-    }
-    ConvertFiberToThread();
-    guard.unlock();
-    released = true;
-}
-
-void Fiber::SetRewindPoint(std::function<void(void*)>&& rewind_func, void* start_parameter) {
-    rewind_point = std::move(rewind_func);
-    rewind_parameter = start_parameter;
-}
-
-void Fiber::Rewind() {
-    ASSERT(rewind_point);
-    ASSERT(impl->rewind_handle == nullptr);
-    impl->rewind_handle = CreateFiber(default_stack_size, &RewindStartFunc, this);
-    SwitchToFiber(impl->rewind_handle);
-}
-
-void Fiber::YieldTo(std::shared_ptr<Fiber>& from, std::shared_ptr<Fiber>& to) {
-    ASSERT_MSG(from != nullptr, "Yielding fiber is null!");
-    ASSERT_MSG(to != nullptr, "Next fiber is null!");
-    to->guard.lock();
-    to->previous_fiber = from;
-    SwitchToFiber(to->impl->handle);
-    ASSERT(from->previous_fiber != nullptr);
-    from->previous_fiber->guard.unlock();
-    from->previous_fiber.reset();
-}
-
-std::shared_ptr<Fiber> Fiber::ThreadToFiber() {
-    std::shared_ptr<Fiber> fiber = std::shared_ptr<Fiber>{new Fiber()};
-    fiber->guard.lock();
-    fiber->impl->handle = ConvertThreadToFiber(nullptr);
-    fiber->is_thread_fiber = true;
-    return fiber;
-}
-
-#else
 
 struct Fiber::FiberImpl {
     alignas(64) std::array<u8, default_stack_size> stack;
@@ -222,5 +118,4 @@ std::shared_ptr<Fiber> Fiber::ThreadToFiber() {
     return fiber;
 }
 
-#endif
 } // namespace Common
