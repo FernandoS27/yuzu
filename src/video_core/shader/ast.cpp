@@ -477,11 +477,13 @@ void ASTManager::Decompile() {
         it++;
     }
     if (full_decompile) {
-        for (const ASTNode& label : labels) {
-            auto& manager = label->GetManager();
-            manager.Remove(label);
+        if (IsFullyDecompiled()) {
+            for (const ASTNode& label : labels) {
+                auto& manager = label->GetManager();
+                manager.Remove(label);
+            }
+            labels.clear();
         }
-        labels.clear();
     } else {
         auto label_it = labels.begin();
         while (label_it != labels.end()) {

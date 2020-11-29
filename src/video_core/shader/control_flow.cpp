@@ -640,9 +640,11 @@ void InsertBranch(ASTManager& mm, const BlockBranchInfo& branch_info) {
         return;
     }
     const auto* multi_branch = std::get_if<MultiBranch>(branch_info.get());
-    for (const auto& branch_case : multi_branch->branches) {
-        mm.InsertGoto(MakeExpr<ExprGprEqual>(multi_branch->gpr, branch_case.cmp_value),
-                      branch_case.address);
+    const auto num_branches = multi_branch->branches.size();
+    for (std::size_t i = num_branches; i != 0; i--) {
+      const auto& branch_case = multi_branch->branches[i-1];
+      mm.InsertGoto(MakeExpr<ExprGprEqual>(multi_branch->gpr, branch_case.cmp_value),
+                    branch_case.address);
     }
 }
 
